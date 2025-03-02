@@ -5,129 +5,291 @@
   <title>Might of the Beholder</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { margin: 0; padding: 0; background: #000; color: #fff; font-family: sans-serif; }
-    #container { display: flex; }
-    #gameCanvas { background: #888; }
+    /* Your snippet: use 60% of the screen height for the entire page */
+    html, body {
+      margin: 0; 
+      padding: 0;
+      width: 100%;
+      height: 100%; /* ensures full viewport for the container */
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 60%; /* or 100%/100vh if you want it all */
+    }
+
+    /* Game container fills leftover vertical space */
+    #gameContainer {
+      position: relative;
+      flex: 1;
+      background: #111;
+    }
+    /* Canvas stretched to fill container (may distort aspect ratio) */
+    #gameCanvas {
+      width: 100%;
+      height: 100%;
+      background: #888;
+      display: block;
+    }
+
+    /* UI panel at the bottom */
     #uiPanel {
-      width: 400px; background: #222; padding: 10px; box-sizing: border-box;
-      display: flex; flex-direction: column; justify-content: flex-start;
+      flex: 0 0 auto;
+      background: #222;
+      padding: 5px;
+      box-sizing: border-box;
+      overflow: hidden; /* no scrolling */
     }
+
+    /* Generic button style */
     .btn {
-      display: inline-block; margin: 4px; padding: 6px 10px; background: #444;
-      cursor: pointer; border: 1px solid #666; user-select: none; font-size: 14px;
+      background: #444;
+      border: 1px solid #666;
+      color: #fff;
+      cursor: pointer;
+      user-select: none;
+      text-align: center;
     }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-    td {
-      width: 150px; vertical-align: top; text-align: center; padding: 3px; border: 1px solid #444;
+
+    /* Two-row movement controls (3 big buttons each row) */
+    #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .control-row {
+      display: flex;
+      width: 100%;
+      justify-content: space-around;
+      margin: 2px 0;
+    }
+    .control-row .btn {
+      flex: 1;
+      margin: 2px;
+      font-size: 2em;
+      padding: 10px; 
+    }
+
+    /* Characters: 2 rows, each with 2 “character-boxes” */
+    #characterPanel {
+      display: flex;
+      flex-direction: column; /* stack 2 rows */
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      margin: 5px 0;
+    }
+    .character-row {
+      display: flex;
+      gap: 10px;
+    }
+    .character-box {
+      display: flex;
+      align-items: center;
+      background: #666;
+      border: 2px solid #444;
+      box-sizing: border-box;
     }
     .portrait {
-      width: 136px; height: 136px; background: #666; margin: 6px 0;
-      border: 2px solid #444; box-sizing: border-box;
+      width: 72px;
+      height: 72px;
+      background: #666;
+      overflow: hidden;
     }
-    #logPanel {
-      margin-top: 8px; padding: 6px; background: #111; min-height: 200px;
-      max-height: 300px; overflow-y: auto; font-size: 14px;
+    .portrait img {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
-    #miniMapCanvas {
-      display: inline-block; border: 1px solid #999; background: #222;
+    /* Buttons to the right of the portrait */
+    .character-actions {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
     }
-    
-    /* Mobile adjustments */
-    @media screen and (max-width: 768px) {
-      #container {
-        flex-direction: column;
-      }
-      #gameCanvas {
-        width: 100%;
-        height: auto;
-      }
-      #uiPanel {
-        width: 100%;
-        padding: 15px;
-      }
-      .btn {
-        font-size: 20px;
-        padding: 10px 15px;
-      }
-      .portrait {
-        width: 150px;
-        height: 150px;
-      }
+    /* Each button: same width as portrait, half the height */
+    .character-actions .btn {
+      width: 70px;
+      height: 30px;
+      margin: 0;
+      font-size: 1em;
+      background: #444; /* giving them a button background again */
+      border: 1px solid #666;
+    }
+
+    /* Map/Log row, 80% of the original size */
+    #extraButtons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+    #extraButtons .btn {
+      font-size: 0.8em;  /* 80% of original */
+      padding: 8px 16px;
+    }
+
+    /* Overlay for Map/Log, on top of the game area */
+    .overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: none; /* hidden by default */
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+    .overlay-content {
+      background: #222;
+      padding: 10px;
+      position: relative;
+      width: 90%;
+      max-width: 400px;
+    }
+    /* Close X on upper-right */
+    .overlay-close {
+      position: absolute; 
+      top: 5px; 
+      right: 5px;
+      background: #444;
+      border: 1px solid #666;
+      cursor: pointer;
+      padding: 5px 10px;
     }
   </style>
 </head>
 <body>
-  <div id="container">
-    <canvas id="gameCanvas" width="2550" height="1100"></canvas>
-    <div id="uiPanel">
-      <center><h3>Might of the Beholder</h3></center>
-      <!-- Movement controls -->
-      <div id="controls" style="text-align: center; margin-bottom: 10px;">
-        <div>
-          <span class="btn" id="btnTurnLeft">Turn Left (Q)</span>
-          <span class="btn" id="btnForward">Forward (W)</span>
-          <span class="btn" id="btnTurnRight">Turn Right (E)</span>
+  <!-- Top: Game -->
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+    <!-- Overlays for Map/Log -->
+    <div id="overlay" class="overlay">
+      <div class="overlay-content">
+        <button class="overlay-close" id="closeOverlay">X</button>
+        <div id="overlayMap" style="display: none;">
+          <canvas id="miniMapCanvas" width="200" height="200"></canvas>
         </div>
-        <div>
-          <span class="btn" id="btnStrafeLeft">Strafe Left (A)</span>
-          <span class="btn" id="btnBack">Back (S)</span>
-          <span class="btn" id="btnStrafeRight">Strafe Right (D)</span>
+        <div id="overlayLog" style="display: none;">
+          <div id="logPanel" style="min-height: 150px; max-height: 250px; overflow-y: auto; font-size: 14px;">
+            <!-- log messages go here -->
+          </div>
         </div>
       </div>
-      
-      <!-- Character info -->
-      <div id="characterPanel" style="text-align: center; margin-bottom: 10px;">
-        <table>
-          <tr>
-            <td>
-              <div>Character 1</div>
-              <div class="portrait"><a href=""><img src="assets/images/SirCaneghemMM3.webp" alt="Character 1"></a></div>
-              <span class="btn" id="attack1"><big>🗡️</big></span>
-              <span class="btn" id="char1Fireball">🔥</span>
-            </td>
-            <td>
-              <div>Character 2</div>
-              <div class="portrait"><a href=""><img src="assets/images/MaximusMM3.webp" alt="Character 2"></a></div>
-              <span class="btn" id="attack2"><big>🗡️</big></span>
-              <span class="btn" id="char2Fireball">🔥</span>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div>Character 3</div>
-              <div class="portrait"><a href=""><img src="assets/images/Wizard.png" alt="Character 3"></a></div>
-              <span class="btn" id="attack3"><big>🗡️</big></span>
-              <span class="btn" id="char3Fireball">🔥</span>
-            </td>
-            <td>
-              <div>Character 4</div>
-              <div class="portrait"><a href=""><img src="assets/images/DarkShadeMM3.webp" alt="Character 4"></a></div>
-              <span class="btn" id="attack4"><big>🗡️</big></span>
-              <span class="btn" id="char4Fireball">🔥</span>
-            </td>
-          </tr>
-        </table>
-      </div>
-      
-      <!-- Mini-map -->
-      <div id="mapContainer" style="text-align: center; margin-bottom: 10px;">
-        <canvas id="miniMapCanvas" width="200" height="200"></canvas>
-      </div>
-      
-      <!-- Log console -->
-      <div id="logPanel" style="margin-top: 10px;"></div>
     </div>
   </div>
-  
+
+  <!-- Bottom: UI Panel -->
+  <div id="uiPanel">
+    <!-- Movement controls -->
+    <div id="controls">
+      <div class="control-row">
+        <span class="btn" id="btnTurnLeft">⟲</span>
+        <span class="btn" id="btnForward">⬆️</span>
+        <span class="btn" id="btnTurnRight">⟳</span>
+      </div>
+      <div class="control-row">
+        <span class="btn" id="btnStrafeLeft">⬅️</span>
+        <span class="btn" id="btnBack">⬇️</span>
+        <span class="btn" id="btnStrafeRight">➡️</span>
+      </div>
+    </div>
+
+    <!-- Characters in 2 rows -->
+    <div id="characterPanel">
+      <div class="character-row">
+        <div class="character-box">
+          <div class="portrait">
+            <img src="assets/images/SirCaneghemMM3.webp" alt="C1">
+          </div>
+          <div class="character-actions">
+            <button class="btn" id="attack1">🗡️</button>
+            <button class="btn" id="char1Fireball">🔥</button>
+          </div>
+        </div>
+        <div class="character-box">
+          <div class="portrait">
+            <img src="assets/images/MaximusMM3.webp" alt="C2">
+          </div>
+          <div class="character-actions">
+            <button class="btn" id="attack2">🗡️</button>
+            <button class="btn" id="char2Fireball">🔥</button>
+          </div>
+        </div>
+      </div>
+      <div class="character-row">
+        <div class="character-box">
+          <div class="portrait">
+            <img src="assets/images/Wizard.png" alt="C3">
+          </div>
+          <div class="character-actions">
+            <button class="btn" id="attack3">🗡️</button>
+            <button class="btn" id="char3Fireball">🔥</button>
+          </div>
+        </div>
+        <div class="character-box">
+          <div class="portrait">
+            <img src="assets/images/DarkShadeMM3.webp" alt="C4">
+          </div>
+          <div class="character-actions">
+            <button class="btn" id="attack4">🗡️</button>
+            <button class="btn" id="char4Fireball">🔥</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map / Log toggles (80% size) -->
+    <div id="extraButtons">
+      <span class="btn" id="btnShowMap">Map</span>
+      <span class="btn" id="btnShowLog">Log</span>
+    </div>
+  </div>
+
+  <script>
+    // Overlay toggling
+    const overlay     = document.getElementById('overlay');
+    const overlayMap  = document.getElementById('overlayMap');
+    const overlayLog  = document.getElementById('overlayLog');
+    const closeBtn    = document.getElementById('closeOverlay');
+    const btnShowMap  = document.getElementById('btnShowMap');
+    const btnShowLog  = document.getElementById('btnShowLog');
+
+    // Toggle if same content is open
+    function toggleOverlay(contentId) {
+      if (overlay.style.display === 'flex' &&
+          document.getElementById(contentId).style.display === 'block') {
+        hideOverlay();
+      } else {
+        showOverlay(contentId);
+      }
+    }
+
+    function showOverlay(contentId) {
+      overlay.style.display = 'flex';
+      overlayMap.style.display = 'none';
+      overlayLog.style.display = 'none';
+      document.getElementById(contentId).style.display = 'block';
+    }
+
+    function hideOverlay() {
+      overlay.style.display = 'none';
+    }
+
+    btnShowMap.addEventListener('click', () => toggleOverlay('overlayMap'));
+    btnShowLog.addEventListener('click', () => toggleOverlay('overlayLog'));
+    closeBtn.addEventListener('click', hideOverlay);
+  </script>
+
   <!-- Engine's core files must be loaded in correct order -->
   <script src="engine/entity.js"></script>
   <script src="engine/controls.js"></script>
   <script src="engine/engine.js"></script>
-  
-  <!-- Game logic -->
   <script src="game/beholder.js"></script>
-  
-  <!-- Dev tools and debugging -->  
-  <script src="utils/debug.js"></script>  
+  <script src="utils/debug.js"></script>
 </body>
 </html>
