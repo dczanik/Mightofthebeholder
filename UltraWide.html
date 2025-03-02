@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Might of the Beholder</title>
+  <style>
+    body { margin: 0; padding: 0; background: #000; color: #fff; font-family: sans-serif; }
+    #container { display: flex; }
+    #gameCanvas { background: #888; }
+    #uiPanel {
+      width: 400px; background: #222; padding: 10px; box-sizing: border-box;
+      display: flex; flex-direction: column; justify-content: flex-start;
+    }
+    .btn {
+      display: inline-block; margin: 4px; padding: 6px 10px; background: #444;
+      cursor: pointer; border: 1px solid #666; user-select: none; font-size: 14px;
+    }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    td {
+      width: 150px; vertical-align: top; text-align: center; padding: 3px; border: 1px solid #444;
+    }
+    .portrait {
+      width: 136px; height: 136px; background: #666; margin: 6px 0;
+      border: 2px solid #444; box-sizing: border-box;
+    }
+    #logPanel {
+      margin-top: 8px; padding: 6px; background: #111; min-height: 200px;
+      max-height: 300px; overflow-y: auto; font-size: 14px;
+    }
+    #miniMapCanvas {
+      display: inline-block; border: 1px solid #999; background: #222;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <canvas id="gameCanvas" width="2550" height="1100"></canvas>
+    <div id="uiPanel">
+      <center><h3>Might of the Beholder</h3></center>
+      <!-- Movement controls -->
+      <div id="controls" style="text-align: center; margin-bottom: 10px;">
+        <div>
+          <span class="btn" id="btnTurnLeft">Turn Left (Q)</span>
+          <span class="btn" id="btnForward">Forward (W)</span>
+          <span class="btn" id="btnTurnRight">Turn Right (E)</span>
+        </div>
+        <div>
+          <span class="btn" id="btnStrafeLeft">Strafe Left (A)</span>
+          <span class="btn" id="btnBack">Back (S)</span>
+          <span class="btn" id="btnStrafeRight">Strafe Right (D)</span>
+        </div>
+      </div>
+      
+      <!-- Character info -->
+      <div id="characterPanel" style="text-align: center; margin-bottom: 10px;">
+        <table>
+          <tr>
+            <td>
+              <div>Character 1</div>
+              <div class="portrait"><a href=""><img src="MM3images/SirCaneghemMM3.webp" alt="Character 1"></a></div>
+              <span class="btn" id="attack1"><big>🗡️</big></span>
+              <span class="btn" id="char1Fireball">🔥</span>
+            </td>
+            <td>
+              <div>Character 2</div>
+              <div class="portrait"><a href=""><img src="MM3images/MaximusMM3.webp" alt="Character 2"></a></div>
+              <span class="btn" id="attack2"><big>🗡️</big></span>
+              <span class="btn" id="char2Fireball">🔥</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div>Character 3</div>
+              <div class="portrait"><a href=""><img src="MM3images/Wizard.png" alt="Character 3"></a></div>
+              <span class="btn" id="attack3"><big>🗡️</big></span>
+              <span class="btn" id="char3Fireball">🔥</span>
+            </td>
+            <td>
+              <div>Character 4</div>
+              <div class="portrait"><a href=""><img src="MM3images/DarkShadeMM3.webp" alt="Character 4"></a></div>
+              <span class="btn" id="attack4"><big>🗡️</big></span>
+              <span class="btn" id="char4Fireball">🔥</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+      
+      <!-- Mini-map -->
+      <div id="mapContainer" style="text-align: center; margin-bottom: 10px;">
+        <canvas id="miniMapCanvas" width="200" height="200"></canvas>
+      </div>
+      
+      <!-- Log console -->
+      <div id="logPanel" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+  
+  <!-- Engine's core files must be loaded in correct order -->
+  <script src="engine/entity.js"></script>
+  <script src="engine/controls.js"></script>
+  <script src="engine/engine.js"></script>
+  
+  <!-- Game logic -->
+  <script src="game/beholder.js"></script>
+  
+  <!-- Dev tools and debugging -->  
+  <script src="utils/debug.js"></script>  
+</body>
+</html>
