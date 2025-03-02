@@ -13,7 +13,7 @@ wallTexture.onload = function() {
   wallTextureLoaded = true; 
   console.log("Wall texture loaded."); 
 };
-wallTexture.src = "MM3images/Wall1.png";
+wallTexture.src = "assets/images/Wall1.png";
 
 // Fireball system globals (available for other modules)
 var fireballs = []; 
