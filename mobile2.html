@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Might of the Beholder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Overall page layout */
+    html, body {
+      margin: 0; 
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 60%; /* or 100% / 100vh if you want full screen usage */
+    }
+
+    /* Top: game area */
+    #gameContainer {
+      position: relative;
+      flex: 1; 
+      background: #111;
+    }
+    #gameCanvas {
+      width: 100%;
+      height: 100%;
+      background: #888;
+      display: block;
+    }
+
+    /* Bottom UI panel - split into left & right columns */
+    #uiPanel {
+      flex: 0 0 auto;
+      background: #222;
+      padding: 3px;
+      box-sizing: border-box;
+      overflow: hidden;
+      display: flex;        /* row layout */
+      flex-direction: row;  /* side by side columns */
+    }
+
+    /* Left side: movement controls + Map/Log */
+    #leftPanel {
+      width: 40%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      box-sizing: border-box;
+      padding-right: 25px;
+    }
+    /* Right side: characters */
+    #rightPanel {
+      width: 60%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding-left: 2px;
+    }
+
+    .btn {
+      background: #444;
+      border: 1px solid #666;
+      color: #fff;
+      cursor: pointer;
+      user-select: none;
+      text-align: center;
+    }
+
+    /* Movement controls: 2 rows, each with 3 big buttons */
+    #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 12px;
+      width: 95%; /* fill left panel width */
+    }
+    .control-row {
+      display: flex;
+      justify-content: space-around;
+      width: 100%;
+      margin: 1px 0;
+    }
+    .control-row .btn {
+      flex: 1;
+      margin: 2px;
+      font-size: 2em;
+      padding: 8px;
+    }
+
+    /* Map/Log buttons below controls */
+    #extraButtons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+    }
+    #extraButtons .btn {
+      font-size: 0.8em;
+      padding: 8px 16px;
+    }
+
+    /* Character panel on the right side */
+    #characterPanel {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      width: 100%; /* fill right panel width */
+    }
+    .character-row {
+      display: flex;
+      gap: 5px;
+      width: 100%;
+      justify-content: center; /* or space-around, up to you */
+    }
+    .character-box {
+      display: flex;
+      align-items: center;
+      background: #666;
+      border: 2px solid #444;
+      box-sizing: border-box;
+      padding: 2px;
+    }
+    .portrait {
+      width: 90px;
+      height: 90px;
+      background: #666;
+      overflow: hidden;
+    }
+    .portrait img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .character-actions {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      margin-left: 5px;
+    }
+    .character-actions .btn {
+      width: 80px;
+      height: 45px;
+      margin: 0;
+      font-size: 1em;
+    }
+
+    /* Overlay for Map/Log */
+    .overlay {
+      position: absolute; 
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: none; /* hidden by default */
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+    .overlay-content {
+      background: #222;
+      padding: 10px;
+      position: relative;
+      width: 90%;
+      max-width: 400px;
+    }
+    .overlay-close {
+      position: absolute;
+      top: 5px; 
+      right: 5px;
+      background: #444;
+      border: 1px solid #666;
+      cursor: pointer;
+      padding: 5px 10px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top: Game -->
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+    <!-- Overlays for Map/Log -->
+    <div id="overlay" class="overlay">
+      <div class="overlay-content">
+        <button class="overlay-close" id="closeOverlay">X</button>
+        <div id="overlayMap" style="display: none;">
+          <canvas id="miniMapCanvas" width="200" height="200"></canvas>
+        </div>
+        <div id="overlayLog" style="display: none;">
+          <div id="logPanel" style="min-height: 150px; max-height: 250px; overflow-y: auto; font-size: 14px;">
+            <!-- log messages go here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: UI panel, split left & right -->
+  <div id="uiPanel">
+    <!-- LEFT half: movement controls + Map/Log -->
+    <div id="leftPanel">
+      <div id="controls">
+        <div class="control-row">
+          <span class="btn" id="btnTurnLeft">⟲</span>
+          <span class="btn" id="btnForward">⬆️</span>
+          <span class="btn" id="btnTurnRight">⟳</span>
+        </div>
+        <div class="control-row">
+          <span class="btn" id="btnStrafeLeft">⬅️</span>
+          <span class="btn" id="btnBack">⬇️</span>
+          <span class="btn" id="btnStrafeRight">➡️</span>
+        </div>
+      </div>
+      <div id="extraButtons">
+        <span class="btn" id="btnShowMap">Map</span>
+        <span class="btn" id="btnShowLog">Log</span>
+      </div>
+    </div>
+
+    <!-- RIGHT half: characters -->
+    <div id="rightPanel">
+      <div id="characterPanel">
+        <div class="character-row">
+          <div class="character-box">
+            <div class="portrait">
+              <img src="assets/images/SirCaneghemMM3.webp" alt="C1">
+            </div>
+            <div class="character-actions">
+              <button class="btn" id="attack1">🗡️</button>
+              <button class="btn" id="char1Fireball">🔥</button>
+            </div>
+          </div>
+          <div class="character-box">
+            <div class="portrait">
+              <img src="assets/images/MaximusMM3.webp" alt="C2">
+            </div>
+            <div class="character-actions">
+              <button class="btn" id="attack2">🗡️</button>
+              <button class="btn" id="char2Fireball">🔥</button>
+            </div>
+          </div>
+        </div>
+        <div class="character-row">
+          <div class="character-box">
+            <div class="portrait">
+              <img src="assets/images/Wizard.png" alt="C3">
+            </div>
+            <div class="character-actions">
+              <button class="btn" id="attack3">🗡️</button>
+              <button class="btn" id="char3Fireball">🔥</button>
+            </div>
+          </div>
+          <div class="character-box">
+            <div class="portrait">
+              <img src="assets/images/DarkShadeMM3.webp" alt="C4">
+            </div>
+            <div class="character-actions">
+              <button class="btn" id="attack4">🗡️</button>
+              <button class="btn" id="char4Fireball">🔥</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Overlay toggling
+    const overlay     = document.getElementById('overlay');
+    const overlayMap  = document.getElementById('overlayMap');
+    const overlayLog  = document.getElementById('overlayLog');
+    const closeBtn    = document.getElementById('closeOverlay');
+    const btnShowMap  = document.getElementById('btnShowMap');
+    const btnShowLog  = document.getElementById('btnShowLog');
+
+    // Toggle if same content is open
+    function toggleOverlay(contentId) {
+      if (overlay.style.display === 'flex' &&
+          document.getElementById(contentId).style.display === 'block') {
+        hideOverlay();
+      } else {
+        showOverlay(contentId);
+      }
+    }
+
+    function showOverlay(contentId) {
+      overlay.style.display = 'flex';
+      overlayMap.style.display = 'none';
+      overlayLog.style.display = 'none';
+      document.getElementById(contentId).style.display = 'block';
+    }
+
+    function hideOverlay() {
+      overlay.style.display = 'none';
+    }
+
+    btnShowMap.addEventListener('click', () => toggleOverlay('overlayMap'));
+    btnShowLog.addEventListener('click', () => toggleOverlay('overlayLog'));
+    closeBtn.addEventListener('click', hideOverlay);
+  </script>
+
+  <!-- Engine's core files must be loaded in correct order -->
+  <script src="engine/entity.js"></script>
+  <script src="engine/controls.js"></script>
+  <script src="engine/engine.js"></script>
+  <script src="game/beholder.js"></script>
+  <script src="utils/debug.js"></script>
+</body>
+</html>
