@@ -102,7 +102,7 @@ monsterTextures.orc = {
 	orcTexture.onload = function() {
 	  console.log("Orc texture loaded.");
 	};
-	orcTexture.src = "assets/images/Orc1.png";
+	orcTexture.src = "assets/images/orc.png";
 	monsterTextures.orc.frames.push(orcTexture);
 
   // Load other monster textures here as needed
