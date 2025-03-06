@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL Raycaster</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+                "three/examples/jsm/controls/PointerLockControls": "https://unpkg.com/three@0.157.0/examples/jsm/controls/PointerLockControls.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
+        
+        let scene, camera, renderer, controls;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Pointer Lock Controls
+            controls = new PointerLockControls(camera, document.body);
+            document.body.addEventListener('click', () => controls.lock());
+
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(50, 50);
+            const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x777777 });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            // Load wall texture
+            const textureLoader = new THREE.TextureLoader();
+            const wallTexture = textureLoader.load('assets/images/Wall1.png', (texture) => {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(1, 1);
+            }, undefined, (err) => console.error("Texture loading error:", err));
+
+            const wallMaterial = new THREE.MeshBasicMaterial({ map: wallTexture });
+            function createWall(x, z) {
+                const geometry = new THREE.BoxGeometry(2, 3, 2);
+                const wall = new THREE.Mesh(geometry, wallMaterial);
+                wall.position.set(x, 1.5, z);
+                scene.add(wall);
+            }
+
+            // Create a simple maze
+            for (let x = -10; x <= 10; x += 2) {
+                createWall(x, -10);
+                createWall(x, 10);
+            }
+            for (let z = -10; z <= 10; z += 2) {
+                createWall(-10, z);
+                createWall(10, z);
+            }
+            createWall(0, -6);
+            createWall(2, -4);
+            createWall(-2, -2);
+            createWall(4, 2);
+            createWall(-4, 6);
+
+            camera.position.set(0, 1.5, 0); // Wolfenstein-like height
+
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            animate();
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveRight = true; break;
+                case 'KeyD': moveLeft = true; break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveRight = false; break;
+                case 'KeyD': moveLeft = false; break;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controls.isLocked) {
+                let speed = 0.1;
+                let direction = new THREE.Vector3();
+                camera.getWorldDirection(direction);
+                direction.y = 0;
+                direction.normalize();
+                
+                if (moveForward) camera.position.addScaledVector(direction, speed);
+                if (moveBackward) camera.position.addScaledVector(direction, -speed);
+                if (moveLeft) camera.position.addScaledVector(new THREE.Vector3().crossVectors(camera.up, direction).normalize(), -speed);
+                if (moveRight) camera.position.addScaledVector(new THREE.Vector3().crossVectors(camera.up, direction).normalize(), speed);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+    </script>
+</head>
+<body>
+</body>
+</html>
