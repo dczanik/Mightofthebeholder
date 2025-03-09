@@ -1,238 +1,335 @@
-// webgl-integration.js - WebGL integration with game engine
-// Minimal version that works with engine.js loading architecture
+// webgl-integration.js - Connects original game systems to WebGL renderer
 
-// Initialize when DOM is ready
-window.addEventListener('load', function() {
-  // Setup will happen after engine.js loads all components
-  console.log("WebGL integration module loaded");
-});
+import * as THREE from 'three';
 
-// Create debug UI
-function createWebGLDebugUI() {
-  // Check if it already exists
-  if (document.getElementById('webgl-debug-ui')) return;
+let scene; // Reference to the Three.js scene
+let entityMeshes = {}; // Map entity IDs to their 3D meshes
+
+// Store the original Entity class methods we'll be overriding
+let originalEntityRender;
+let originalEntityManagerRender;
+
+// Materials for different entity types
+const entityMaterials = {
+  monster: {
+    skeleton: new THREE.MeshStandardMaterial({ 
+      color: 0xffffff, 
+      emissive: 0x111111,
+      roughness: 0.9,
+      metalness: 0.1
+    }),
+    orc: new THREE.MeshStandardMaterial({ 
+      color: 0x22cc22, 
+      emissive: 0x002200,
+      roughness: 0.7,
+      metalness: 0.2
+    }),
+    spider: new THREE.MeshStandardMaterial({ 
+      color: 0xcc2222, 
+      emissive: 0x220000,
+      roughness: 0.8,
+      metalness: 0.2
+    }),
+    wizard: new THREE.MeshStandardMaterial({ 
+      color: 0x7777ff, 
+      emissive: 0x000022,
+      roughness: 0.5,
+      metalness: 0.5
+    })
+  },
+  projectile: {
+    fireball: new THREE.MeshStandardMaterial({ 
+      color: 0xff5500, 
+      emissive: 0xff3300,
+      emissiveIntensity: 0.7,
+      roughness: 0.3,
+      metalness: 0.2
+    }),
+    arrow: new THREE.MeshStandardMaterial({ 
+      color: 0xaa7700
+    }),
+    iceSpell: new THREE.MeshStandardMaterial({ 
+      color: 0x00aaff, 
+      emissive: 0x0055aa,
+      emissiveIntensity: 0.5,
+      roughness: 0.4,
+      metalness: 0.6
+    })
+  }
+};
+
+// Initialize the integration
+function initWebGLIntegration(threeScene) {
+  scene = threeScene;
   
-  // Create container
-  const container = document.createElement('div');
-  container.id = 'webgl-debug-ui';
-  container.style.position = 'fixed';
-  container.style.bottom = '10px';
-  container.style.left = '10px';
-  container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  container.style.color = 'white';
-  container.style.padding = '10px';
-  container.style.borderRadius = '5px';
-  container.style.fontFamily = 'monospace';
-  container.style.fontSize = '12px';
-  container.style.zIndex = '1000';
-  
-  // Create title
-  const title = document.createElement('div');
-  title.textContent = 'WebGL Controls';
-  title.style.fontWeight = 'bold';
-  title.style.marginBottom = '5px';
-  container.appendChild(title);
-  
-  // Create control buttons
-  const buttons = [
-    { id: 'toggle-renderer', text: 'Toggle Renderer (R)', action: 'toggleRenderer' },
-    { id: 'toggle-quality', text: 'Toggle Quality (T)', action: 'toggleRendererQuality' },
-    { id: 'toggle-fps', text: 'Toggle FPS (F)', action: 'toggleFPSCounter' },
-    { id: 'toggle-debug', text: 'Toggle Debug (D)', action: 'toggleDebugMode' }
-  ];
-  
-  buttons.forEach(btn => {
-    const button = document.createElement('button');
-    button.id = btn.id;
-    button.textContent = btn.text;
-    button.style.display = 'block';
-    button.style.width = '100%';
-    button.style.marginBottom = '5px';
-    button.style.padding = '5px';
-    button.style.backgroundColor = '#333';
-    button.style.color = 'white';
-    button.style.border = 'none';
-    button.style.borderRadius = '3px';
-    button.style.cursor = 'pointer';
-    
-    // Add click handler
-    button.onclick = function() {
-      const action = btn.action;
-      if (action === 'toggleRenderer' && window.toggleRenderer) {
-        window.toggleRenderer();
-      } 
-      else if (action === 'toggleQuality' && window.toggleRendererQuality) {
-        window.toggleRendererQuality();
-      }
-      else if (action === 'toggleFPS' && window.toggleFPSCounter) {
-        window.toggleFPSCounter();
-      }
-      else if (action === 'toggleDebugMode') {
-        toggleDebugMode();
-      }
-    };
-    
-    container.appendChild(button);
-  });
-  
-  // Create status section
-  const status = document.createElement('div');
-  status.id = 'webgl-status';
-  status.style.marginTop = '10px';
-  status.style.padding = '5px';
-  status.style.backgroundColor = '#222';
-  status.style.borderRadius = '3px';
-  
-  // Add status info
-  updateStatus();
-  function updateStatus() {
-    const renderer = window.usingWebGL ? 'WebGL' : 'Canvas';
-    const quality = window.renderer?.options?.quality || 'unknown';
-    const debugMode = (window.lightingManager?.debugMode || false) ? 'ON' : 'OFF';
-    
-    status.innerHTML = `
-      <div>Renderer: ${renderer}</div>
-      <div>Quality: ${quality}</div>
-      <div>Debug: ${debugMode}</div>
-    `;
+  // Patch Entity methods if available
+  if (window.Entity && window.Entity.prototype) {
+    patchEntityClass();
   }
   
-  // Store update function
-  window.updateWebGLDebugUI = updateStatus;
+  // Patch EntityManager methods if available
+  if (window.EntityManager && window.EntityManager.prototype) {
+    patchEntityManagerClass();
+  }
   
-  container.appendChild(status);
+  console.log("WebGL Integration initialized");
   
-  // Add to document
-  document.body.appendChild(container);
+  return {
+    createEntityMesh,
+    updateEntityMesh,
+    removeEntityMesh
+  };
 }
 
-// Toggle debug mode
-function toggleDebugMode() {
-  // Toggle debug mode for lighting manager
-  if (window.lightingManager) {
-    window.lightingManager.debugMode = !window.lightingManager.debugMode;
-  }
+// Patch the Entity class to handle WebGL rendering
+function patchEntityClass() {
+  // Store the original render method
+  originalEntityRender = window.Entity.prototype.render;
   
-  // Toggle debug mode for renderer
-  if (window.renderer && window.renderer.options) {
-    window.renderer.options.debugMode = !window.renderer.options.debugMode;
-  }
+  // Override the render method
+  window.Entity.prototype.render = function(ctx, player, screenW, screenH, fov, castRay) {
+    // Still call the original method for minimap and UI
+    if (originalEntityRender) {
+      originalEntityRender.call(this, ctx, player, screenW, screenH, fov, castRay);
+    }
+    
+    // WebGL rendering is handled separately in createEntityMesh and updateEntityMesh
+    // We don't need to do anything here
+  };
   
-  // Log status
-  const debugEnabled = window.lightingManager ? window.lightingManager.debugMode : false;
-  console.log(`Debug mode: ${debugEnabled ? 'enabled' : 'disabled'}`);
-  if (window.log) {
-    window.log(`Debug mode: ${debugEnabled ? 'enabled' : 'disabled'}`);
-  }
+  // Add a method for WebGL rendering (separate from Canvas)
+  window.Entity.prototype.renderWebGL = function(scene, player) {
+    // This is handled by the mesh system, so it's just a placeholder
+  };
   
-  // Update UI
-  if (window.updateWebGLDebugUI) {
-    window.updateWebGLDebugUI();
-  }
+  console.log("Entity class patched for WebGL");
 }
 
-// Run diagnostics on WebGL rendering
-function diagnoseWebGLStatus() {
-  console.log("=== WEBGL RENDERING DIAGNOSIS ===");
+// Patch the EntityManager class
+function patchEntityManagerClass() {
+  // Store the original render method
+  originalEntityManagerRender = window.EntityManager.prototype.render;
   
-  // Check canvas element
-  const canvas = document.getElementById('gameCanvas');
-  console.log("Canvas:", canvas ? `Found (${canvas.width}x${canvas.height})` : "MISSING");
+  // Override the render method
+  window.EntityManager.prototype.render = function(ctx, player, screenW, screenH, fov, castRay) {
+    // Still call the original method for minimap and UI
+    if (originalEntityManagerRender) {
+      originalEntityManagerRender.call(this, ctx, player, screenW, screenH, fov, castRay);
+    }
+    
+    // WebGL rendering is handled in the updateEntities function
+  };
   
-  // Check WebGL context
-  let webglAvailable = false;
-  let webglVersion = "None";
-  try {
-    const testCtx1 = canvas.getContext('webgl2');
-    if (testCtx1) {
-      webglAvailable = true;
-      webglVersion = "WebGL 2.0";
-    } else {
-      const testCtx2 = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (testCtx2) {
-        webglAvailable = true;
-        webglVersion = "WebGL 1.0";
+  // Add an update method specifically for WebGL rendering
+  window.EntityManager.prototype.updateWebGLEntities = function(scene, player) {
+    // Update each entity's WebGL representation
+    const entities = this.getAllEntities();
+    
+    for (const entity of entities) {
+      // Skip inactive entities
+      if (!entity.active || !entity.visible) {
+        // Remove any existing mesh
+        if (entityMeshes[entity.id]) {
+          removeEntityMesh(entity.id);
+        }
+        continue;
+      }
+      
+      // Create or update entity mesh
+      if (!entityMeshes[entity.id]) {
+        createEntityMesh(entity);
+      } else {
+        updateEntityMesh(entity, player);
       }
     }
-  } catch (e) {}
+    
+    // Remove meshes for entities that no longer exist
+    const existingIds = new Set(entities.map(e => e.id));
+    for (const meshId in entityMeshes) {
+      if (!existingIds.has(meshId)) {
+        removeEntityMesh(meshId);
+      }
+    }
+  };
   
-  console.log("WebGL Support:", webglAvailable ? webglVersion : "Not available");
+  console.log("EntityManager class patched for WebGL");
+}
+
+// Create a 3D mesh for an entity
+function createEntityMesh(entity) {
+  if (!scene) return null;
   
-  // Check renderer
-  console.log("Current Renderer:", window.usingWebGL ? "WebGL" : "Canvas");
-  if (window.renderer) {
-    console.log("Renderer Options:", window.renderer.options || "Not available");
-    console.log("FPS:", window.fps || "Unknown");
+  let geometry, material;
+  
+  // Set up geometry based on entity type
+  switch (entity.type) {
+    case "monster":
+      // For monsters, use different models based on monster type
+      switch (entity.monsterType) {
+        case "skeleton":
+          geometry = new THREE.BoxGeometry(0.8, 1.5, 0.8);
+          material = entityMaterials.monster.skeleton;
+          break;
+        case "orc":
+          geometry = new THREE.BoxGeometry(1.0, 1.8, 1.0);
+          material = entityMaterials.monster.orc;
+          break;
+        case "spider":
+          geometry = new THREE.BoxGeometry(1.2, 0.8, 1.2);
+          material = entityMaterials.monster.spider;
+          break;
+        case "wizard":
+          geometry = new THREE.BoxGeometry(0.8, 1.7, 0.8);
+          material = entityMaterials.monster.wizard;
+          break;
+        default:
+          // Default monster geometry
+          geometry = new THREE.BoxGeometry(1.0, 1.5, 1.0);
+          material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      }
+      break;
+    
+    case "projectile":
+      // For projectiles, use different models based on projectile type
+      switch (entity.projectileType) {
+        case "fireball":
+          geometry = new THREE.SphereGeometry(0.5, 8, 8);
+          material = entityMaterials.projectile.fireball;
+          break;
+        case "arrow":
+          geometry = new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8);
+          material = entityMaterials.projectile.arrow;
+          break;
+        case "iceSpell":
+          geometry = new THREE.SphereGeometry(0.4, 8, 8);
+          material = entityMaterials.projectile.iceSpell;
+          break;
+        default:
+          // Default projectile geometry
+          geometry = new THREE.SphereGeometry(0.3, 8, 8);
+          material = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+      }
+      break;
+      
+    default:
+      // Default entity geometry
+      geometry = new THREE.BoxGeometry(1.0, 1.0, 1.0);
+      material = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+  }
+  
+  // Create mesh
+  const mesh = new THREE.Mesh(geometry, material);
+  
+  // Set initial position
+  mesh.position.set(entity.x, entity.height / 2 || 0.5, entity.y);
+  
+  // Add a light for some entities
+  if (entity.type === "projectile" && entity.projectileType === "fireball") {
+    const light = new THREE.PointLight(0xff5500, 1.5, 5);
+    light.position.set(0, 0, 0);
+    mesh.add(light);
+    mesh.userData.light = light;
+  }
+  
+  // Add to scene
+  scene.add(mesh);
+  
+  // Store reference
+  entityMeshes[entity.id] = mesh;
+  
+  return mesh;
+}
+
+// Update an entity's mesh position and rotation
+function updateEntityMesh(entity, player) {
+  const mesh = entityMeshes[entity.id];
+  if (!mesh) return;
+  
+  // Update position
+  mesh.position.set(entity.x, entity.height / 2 || 0.5, entity.y);
+  
+  // For monsters, make them face the player
+  if (entity.type === "monster") {
+    // Calculate angle to player
+    const dx = player.x - entity.x;
+    const dz = player.y - entity.y;
+    const angleToPlayer = Math.atan2(dz, dx);
+    
+    // Set rotation to face player
+    mesh.rotation.y = -angleToPlayer;
+    
+    // If monster is in attack state, add visual indication
+    if (entity.state === "attack") {
+      // Pulse the emissive intensity
+      const pulseFactor = 0.5 + 0.5 * Math.sin(Date.now() * 0.01);
+      if (mesh.material.emissiveIntensity !== undefined) {
+        mesh.material.emissiveIntensity = pulseFactor * 0.5;
+      }
+    }
+  }
+  
+  // For projectiles, set proper rotation based on movement angle
+  if (entity.type === "projectile") {
+    // Rotate to match direction of travel
+    if (entity.angle !== undefined) {
+      mesh.rotation.y = -entity.angle + Math.PI / 2;
+    }
+    
+    // Update projectile light flicker if it has one
+    if (mesh.userData.light) {
+      const flickerFactor = 0.8 + 0.2 * Math.sin(Date.now() * 0.01);
+      mesh.userData.light.intensity = 1.5 * flickerFactor;
+    }
+  }
+}
+
+// Remove an entity's mesh
+function removeEntityMesh(entityId) {
+  const mesh = entityMeshes[entityId];
+  if (!mesh) return;
+  
+  // Remove from scene
+  scene.remove(mesh);
+  
+  // Remove from tracking object
+  delete entityMeshes[entityId];
+}
+
+// Update all entity meshes
+function updateEntities(entityManager, player) {
+  if (!entityManager || !player) return;
+  
+  // Use the EntityManager's updateWebGLEntities method if available
+  if (typeof entityManager.updateWebGLEntities === 'function') {
+    entityManager.updateWebGLEntities(scene, player);
   } else {
-    console.log("No renderer found");
-  }
-  
-  // Check player position
-  if (window.player) {
-    console.log(`Player Position: x=${window.player.x.toFixed(2)}, y=${window.player.y.toFixed(2)}`);
-    console.log(`Player Angle: ${window.player.angle.toFixed(2)} rad`);
-  }
-  
-  // Check lighting
-  if (window.lightingManager) {
-    const numLights = Object.keys(window.lightingManager.lights).length;
-    console.log(`Lighting System: ${numLights} lights`);
-    console.log(`Debug Mode: ${window.lightingManager.debugMode ? "ON" : "OFF"}`);
-  } else {
-    console.log("No lighting manager found");
-  }
-  
-  console.log("=== END OF DIAGNOSIS ===");
-  
-  // Log to game console
-  if (window.log) {
-    window.log("WebGL diagnosis printed to console (F12)");
+    // Fallback if not patched
+    const entities = entityManager.getAllEntities();
+    
+    for (const entity of entities) {
+      if (!entity.active || !entity.visible) {
+        // Remove any existing mesh
+        if (entityMeshes[entity.id]) {
+          removeEntityMesh(entity.id);
+        }
+        continue;
+      }
+      
+      // Create or update entity mesh
+      if (!entityMeshes[entity.id]) {
+        createEntityMesh(entity);
+      } else {
+        updateEntityMesh(entity, player);
+      }
+    }
   }
 }
 
-// Enhance keyboard controls
-function enhanceKeyboardControls() {
-  document.addEventListener('keydown', function(e) {
-    const key = e.key.toLowerCase();
-    
-    // R key toggles renderer
-    if (key === 'r' && window.toggleRenderer) {
-      window.toggleRenderer();
-    }
-    
-    // T key toggles quality
-    if (key === 't' && window.toggleRendererQuality) {
-      window.toggleRendererQuality();
-    }
-    
-    // D key toggles debug mode
-    if (key === 'd') {
-      toggleDebugMode();
-    }
-    
-    // V key runs diagnostics
-    if (key === 'v') {
-      diagnoseWebGLStatus();
-    }
-  });
-}
-
-// Initialize WebGL enhancements
-function initWebGLEnhancements() {
-  // Set up debug UI
-  createWebGLDebugUI();
-  
-  // Set up keyboard controls
-  enhanceKeyboardControls();
-  
-  // Export functions globally
-  window.toggleDebugMode = toggleDebugMode;
-  window.diagnoseWebGLStatus = diagnoseWebGLStatus;
-  
-  console.log("WebGL enhancements initialized");
-}
-
-// Call initialization after a delay to ensure engine.js has loaded everything
-setTimeout(initWebGLEnhancements, 1000);
-
-// End of webgl-intergration
+// Export functions
+export {
+  initWebGLIntegration,
+  updateEntities,
+  createEntityMesh,
+  updateEntityMesh,
+  removeEntityMesh
+};

@@ -1,345 +1,398 @@
-// controls.js - Input handling for the game
+// controls.js - Input handling for the WebGL version
+// Non-module version
 
-// Movement functions
-function moveForward() {
-  if (player.isMoving || player.isTurning) return;
-  var delta = dirDeltas(player.direction);
-  var nx = Math.floor(player.x) + delta[0];
-  var ny = Math.floor(player.y) + delta[1];
-  if (canMoveTo(nx + 0.5, ny + 0.5)) {
-    log("Move Forward.");
-    startMoveAnimation(nx + 0.5, ny + 0.5);
+// State flags for continuous movement
+window.moveForward = false;
+window.moveBackward = false;
+window.moveLeft = false;
+window.moveRight = false;
+
+// SCALE_FACTOR will be provided by webgl-engine.js
+// DO NOT declare it here to avoid redeclaration errors
+
+// Reference to player object (will be set during initialization)
+let playerRef = null;
+let worldMapRef = null;
+
+// Base direction deltas without scaling
+function dirDeltas(d) {
+  // 0=North: (0,-1), 1=East: (1,0), 2=South: (0,1), 3=West: (-1,0)
+  switch(d) {
+    case 0: return [0, -1];
+    case 1: return [1, 0];
+    case 2: return [0, 1];
+    case 3: return [-1, 0];
+  }
+  return [0, 0];
+}
+
+// Scaled direction deltas for WebGL movement
+function getScaledDirectionDeltas(d) {
+  const base = dirDeltas(d);
+  // Use window.SCALE_FACTOR which is set by webgl-engine.js
+  return [base[0] * window.SCALE_FACTOR, base[1] * window.SCALE_FACTOR];
+}
+
+// Direction to angle conversion
+function dirToAngle(d) {
+  // 0=North => -π/2, 1=East => 0, 2=South => π/2, 3=West => π
+  switch(d) {
+    case 0: return -Math.PI / 2;
+    case 1: return 0;
+    case 2: return Math.PI / 2;
+    case 3: return Math.PI;
+  }
+  return 0;
+}
+
+function directionToString(dir) {
+  switch(dir) {
+    case 0: return "North";
+    case 1: return "East";
+    case 2: return "South";
+    case 3: return "West";
+    default: return "Unknown";
   }
 }
 
-function moveBackward() {
-  if (player.isMoving || player.isTurning) return;
-  var delta = dirDeltas(player.direction);
-  var nx = Math.floor(player.x) - delta[0];
-  var ny = Math.floor(player.y) - delta[1];
-  if (canMoveTo(nx + 0.5, ny + 0.5)) {
-    log("Move Backward.");
-    startMoveAnimation(nx + 0.5, ny + 0.5);
+// Collision detection for movement
+function canMoveTo(nx, ny) {
+  if (!worldMapRef) return false;
+  
+  // Convert from scaled coordinates back to map coordinates for collision
+  const mapX = nx / window.SCALE_FACTOR;
+  const mapY = ny / window.SCALE_FACTOR;
+  
+  const tileX = Math.floor(mapX);
+  const tileY = Math.floor(mapY);
+  
+  // Check map boundaries
+  if (tileX < 0 || tileY < 0 || 
+      tileX >= window.mapWidth || tileY >= window.mapHeight) {
+    return false;
+  }
+  
+  // Check if tile is a wall
+  return worldMapRef[tileY][tileX] === 0;
+}
+
+// Movement & turning animation functions
+function startMoveAnimation(tx, ty) {
+  if (!playerRef) {
+    console.error("playerRef is not defined in startMoveAnimation! Using window.player instead.");
+    if (window.player) {
+      playerRef = window.player;
+    } else {
+      console.error("No player reference available. Movement cannot be performed.");
+      return;
+    }
+  }
+  
+  if (playerRef.isMoving || playerRef.isTurning) return;
+  
+  playerRef.isMoving = true;
+  playerRef.moveStartTime = performance.now();
+  playerRef.startX = playerRef.x;
+  playerRef.startY = playerRef.y;
+  playerRef.endX = tx;
+  playerRef.endY = ty;
+  
+  // Use global log function if available
+  if (typeof window.log === 'function') {
+    window.log(`Moving to (${Math.floor(tx/window.SCALE_FACTOR)},${Math.floor(ty/window.SCALE_FACTOR)})`);
+  } else {
+    console.log(`Moving to (${Math.floor(tx/window.SCALE_FACTOR)},${Math.floor(ty/window.SCALE_FACTOR)})`);
   }
 }
 
-function strafeLeft() {
-  if (player.isMoving || player.isTurning) return;
-  var leftDir = (player.direction + 3) % 4;
-  var delta = dirDeltas(leftDir);
-  var nx = Math.floor(player.x) + delta[0];
-  var ny = Math.floor(player.y) + delta[1];
-  if (canMoveTo(nx + 0.5, ny + 0.5)) {
-    log("Strafe Left.");
-    startMoveAnimation(nx + 0.5, ny + 0.5);
+function startTurnAnimation(newDir) {
+  if (!playerRef) {
+    console.error("playerRef is not defined in startTurnAnimation! Using window.player instead.");
+    if (window.player) {
+      playerRef = window.player;
+    } else {
+      console.error("No player reference available. Turn cannot be performed.");
+      return;
+    }
+  }
+  
+  if (playerRef.isMoving || playerRef.isTurning) return;
+  
+  playerRef.isTurning = true;
+  playerRef.turnStartTime = performance.now();
+  playerRef.startAngle = playerRef.angle;
+  playerRef.direction = newDir;
+  
+  // Calculate new angle based on direction
+  playerRef.endAngle = dirToAngle(newDir);
+  
+  // Fix for the turning direction - always turn the shorter way
+  var diff = playerRef.endAngle - playerRef.startAngle;
+  
+  // Handle wrapping around
+  if (diff > Math.PI) {
+    // If difference is more than 180 degrees one way, go the other way
+    playerRef.startAngle += 2 * Math.PI;
+  } else if (diff < -Math.PI) {
+    // If difference is more than 180 degrees the other way, go the first way
+    playerRef.endAngle += 2 * Math.PI;
+  }
+  
+  if (typeof window.log === 'function') {
+    window.log(`Turning to face ${directionToString(newDir)}`);
+  } else {
+    console.log(`Turning to face ${directionToString(newDir)}`);
   }
 }
 
-function strafeRight() {
-  if (player.isMoving || player.isTurning) return;
-  var rightDir = (player.direction + 1) % 4;
-  var delta = dirDeltas(rightDir);
-  var nx = Math.floor(player.x) + delta[0];
-  var ny = Math.floor(player.y) + delta[1];
-  if (canMoveTo(nx + 0.5, ny + 0.5)) {
-    log("Strafe Right.");
-    startMoveAnimation(nx + 0.5, ny + 0.5);
-  }
-}
-
+// Turn functions
 function turnLeft() {
-  if (player.isMoving || player.isTurning) return;
-  var newDir = (player.direction + 3) % 4;
-  log("Turn Left. Now facing " + directionToString(newDir) + ".");
+  if (!playerRef) {
+    console.error("playerRef is not defined in turnLeft! Using window.player instead.");
+    if (window.player) {
+      playerRef = window.player;
+    } else {
+      console.error("No player reference available. Turn cannot be performed.");
+      return;
+    }
+  }
+  
+  if (playerRef.isMoving || playerRef.isTurning) return;
+  
+  // Turn counter-clockwise (add 3 and mod 4 = subtract 1 with wrapping)
+  const newDir = (playerRef.direction + 3) % 4;
+  console.log(`Turning left from ${directionToString(playerRef.direction)} to ${directionToString(newDir)}`);
   startTurnAnimation(newDir);
 }
 
 function turnRight() {
-  if (player.isMoving || player.isTurning) return;
-  var newDir = (player.direction + 1) % 4;
-  log("Turn Right. Now facing " + directionToString(newDir) + ".");
+  if (!playerRef) {
+    console.error("playerRef is not defined in turnRight! Using window.player instead.");
+    if (window.player) {
+      playerRef = window.player;
+    } else {
+      console.error("No player reference available. Turn cannot be performed.");
+      return;
+    }
+  }
+  
+  if (playerRef.isMoving || playerRef.isTurning) return;
+  
+  // Turn clockwise (add 1 and mod 4)
+  const newDir = (playerRef.direction + 1) % 4;
+  console.log(`Turning right from ${directionToString(playerRef.direction)} to ${directionToString(newDir)}`);
   startTurnAnimation(newDir);
 }
 
-// Set up button event listeners
-function setupControlButtons() {
-  document.getElementById("btnForward").onclick = moveForward;
-  document.getElementById("btnBack").onclick = moveBackward;
-  document.getElementById("btnTurnLeft").onclick = turnLeft;
-  document.getElementById("btnTurnRight").onclick = turnRight;
-  document.getElementById("btnStrafeLeft").onclick = strafeLeft;
-  document.getElementById("btnStrafeRight").onclick = strafeRight;
-}
-
-// Test functions for renderer controls
-function testToggleRenderer() {
-  console.log("Test toggle renderer button clicked");
-  if (typeof window.toggleRenderer === 'function') {
-    window.toggleRenderer();
-    console.log("Renderer type after toggle:", window.usingWebGL ? "WebGL" : "Canvas");
-  } else {
-    console.error("toggleRenderer function is not defined!");
-    alert("WebGL toggle function not available");
-  }
-  updateControlPanelButtons();
-}
-
-function testToggleQuality() {
-  console.log("Test toggle quality button clicked"); 
-  if (typeof window.toggleRendererQuality === 'function') {
-    const quality = window.toggleRendererQuality();
-    console.log("Quality after toggle:", quality);
-  } else {
-    console.error("toggleRendererQuality function is not defined!");
-    alert("Quality toggle function not available");
-  }
-  updateControlPanelButtons();
-}
-
-// Function to update all control panel buttons
-function updateControlPanelButtons() {
-  // Update renderer toggle button
-  var rendererToggle = document.getElementById('rendererToggleBtn');
-  if (rendererToggle) {
-    rendererToggle.textContent = `Switch to ${window.usingWebGL ? 'Canvas' : 'WebGL'} (R)`;
-  }
-  
-  // Update quality toggle button
-  var qualityToggle = document.getElementById('qualityToggleBtn');
-  if (qualityToggle && window.renderer && window.renderer.options) {
-    qualityToggle.textContent = `Quality: ${window.renderer.options.quality} (T)`;
-  }
-  
-  // Update lighting toggle button
-  var lightingToggle = document.getElementById('lightingToggleBtn');
-  if (lightingToggle) {
-    lightingToggle.textContent = `Lighting: ${window.useEnhancedLighting ? 'ON' : 'OFF'} (L)`;
-  }
-  
-  // Update debug toggle button
-  var debugToggle = document.getElementById('debugToggleBtn');
-  if (debugToggle && window.lightingManager) {
-    debugToggle.textContent = `Debug: ${window.lightingManager.debugMode ? 'ON' : 'OFF'} (D)`;
-  }
-}
-
-// Create renderer control panel
-function createRendererControls() {
-  // Check if it already exists
-  if (document.getElementById('rendererControls')) {
-    return;
-  }
-  
-  // Create control panel container
-  var controlPanel = document.createElement('div');
-  controlPanel.id = 'rendererControls';
-  controlPanel.style.position = 'absolute';
-  controlPanel.style.bottom = '10px';
-  controlPanel.style.right = '10px';
-  controlPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  controlPanel.style.color = 'white';
-  controlPanel.style.padding = '10px';
-  controlPanel.style.borderRadius = '5px';
-  controlPanel.style.fontFamily = 'sans-serif';
-  controlPanel.style.fontSize = '14px';
-  controlPanel.style.zIndex = '1000';
-  controlPanel.style.minWidth = '200px';
-  
-  // Add title
-  var title = document.createElement('div');
-  title.textContent = 'Renderer Settings';
-  title.style.fontWeight = 'bold';
-  title.style.marginBottom = '10px';
-  title.style.borderBottom = '1px solid #444';
-  title.style.paddingBottom = '5px';
-  controlPanel.appendChild(title);
-  
-  // Add renderer toggle button
-  var rendererToggle = document.createElement('button');
-  rendererToggle.id = 'rendererToggleBtn';
-  rendererToggle.textContent = 'Switch Renderer (R)';
-  rendererToggle.style.display = 'block';
-  rendererToggle.style.width = '100%';
-  rendererToggle.style.padding = '5px';
-  rendererToggle.style.marginBottom = '5px';
-  rendererToggle.style.backgroundColor = '#444';
-  rendererToggle.style.color = 'white';
-  rendererToggle.style.border = 'none';
-  rendererToggle.style.borderRadius = '3px';
-  rendererToggle.style.cursor = 'pointer';
-  rendererToggle.onclick = testToggleRenderer; // Use test function
-  controlPanel.appendChild(rendererToggle);
-  
-  // Add quality toggle button
-  var qualityToggle = document.createElement('button');
-  qualityToggle.id = 'qualityToggleBtn';
-  qualityToggle.textContent = 'Toggle Quality (T)';
-  qualityToggle.style.display = 'block';
-  qualityToggle.style.width = '100%';
-  qualityToggle.style.padding = '5px';
-  qualityToggle.style.marginBottom = '5px';
-  qualityToggle.style.backgroundColor = '#444';
-  qualityToggle.style.color = 'white';
-  qualityToggle.style.border = 'none';
-  qualityToggle.style.borderRadius = '3px';
-  qualityToggle.style.cursor = 'pointer';
-  qualityToggle.onclick = testToggleQuality; // Use test function
-  controlPanel.appendChild(qualityToggle);
-  
-  // Add lighting toggle button
-  var lightingToggle = document.createElement('button');
-  lightingToggle.id = 'lightingToggleBtn';
-  lightingToggle.textContent = 'Toggle Lighting (L)';
-  lightingToggle.style.display = 'block';
-  lightingToggle.style.width = '100%';
-  lightingToggle.style.padding = '5px';
-  lightingToggle.style.marginBottom = '5px';
-  lightingToggle.style.backgroundColor = '#444';
-  lightingToggle.style.color = 'white';
-  lightingToggle.style.border = 'none';
-  lightingToggle.style.borderRadius = '3px';
-  lightingToggle.style.cursor = 'pointer';
-  lightingToggle.onclick = function() {
-    window.useEnhancedLighting = !window.useEnhancedLighting;
-    log("Enhanced lighting: " + (window.useEnhancedLighting ? "ON" : "OFF"));
-    updateControlPanelButtons();
-  };
-  controlPanel.appendChild(lightingToggle);
-  
-  // Add debug toggle button
-  var debugToggle = document.createElement('button');
-  debugToggle.id = 'debugToggleBtn';
-  debugToggle.textContent = 'Toggle Debug (D)';
-  debugToggle.style.display = 'block';
-  debugToggle.style.width = '100%';
-  debugToggle.style.padding = '5px';
-  debugToggle.style.backgroundColor = '#444';
-  debugToggle.style.color = 'white';
-  debugToggle.style.border = 'none';
-  debugToggle.style.borderRadius = '3px';
-  debugToggle.style.cursor = 'pointer';
-  debugToggle.onclick = function() {
-    if (window.lightingManager) {
-      window.lightingManager.debugMode = !window.lightingManager.debugMode;
-      log("Debug mode: " + (window.lightingManager.debugMode ? "ON" : "OFF"));
-      updateControlPanelButtons();
+// Handle continuous movement - called from animation loop
+function updateContinuousMovement() {
+  try {
+    if (!playerRef) {
+      console.error("playerRef is not defined in updateContinuousMovement! Using window.player instead.");
+      if (window.player) {
+        playerRef = window.player;
+      } else {
+        console.error("No player reference available. Movement cannot be performed.");
+        return;
+      }
     }
-  };
-  controlPanel.appendChild(debugToggle);
-  
-  // Add diagnostic button
-  var diagnosticBtn = document.createElement('button');
-  diagnosticBtn.id = 'diagnosticBtn';
-  diagnosticBtn.textContent = 'Diagnostics (P)';
-  diagnosticBtn.style.display = 'block';
-  diagnosticBtn.style.width = '100%';
-  diagnosticBtn.style.padding = '5px';
-  diagnosticBtn.style.marginTop = '10px';
-  diagnosticBtn.style.backgroundColor = '#555';
-  diagnosticBtn.style.color = 'white';
-  diagnosticBtn.style.border = 'none';
-  diagnosticBtn.style.borderRadius = '3px';
-  diagnosticBtn.style.cursor = 'pointer';
-  diagnosticBtn.onclick = function() {
-    if (window.diagnoseRendererIssues) {
-      window.diagnoseRendererIssues();
-      log("Renderer diagnostic printed to console");
-    } else {
-      console.error("diagnoseRendererIssues function is not defined!");
+    
+    if (!worldMapRef) {
+      console.error("worldMapRef is not defined! Using window.worldMap instead.");
+      if (window.worldMap) {
+        worldMapRef = window.worldMap;
+      } else {
+        console.error("No world map reference available. Movement checks cannot be performed.");
+        return;
+      }
     }
-  };
-  controlPanel.appendChild(diagnosticBtn);
-  
-  // Add to document
-  document.body.appendChild(controlPanel);
-  
-  // Update buttons with current state
-  updateControlPanelButtons();
-  
-  return controlPanel;
-}
-
-// Set up keyboard event listeners
-function setupKeyboardControls() {
-  // Remove any existing event listeners to avoid duplicates
-  window.removeEventListener("keydown", handleKeyDown);
-  
-  // Add the event listener with our handler function
-  window.addEventListener("keydown", handleKeyDown);
-  console.log("Keyboard controls initialized");
-}
-
-// Centralized keyboard handler function
-function handleKeyDown(e) {
-  var key = e.key.toLowerCase();
-  console.log("Key pressed:", key);
-  
-  // Movement controls
-  if (key === 'q') turnLeft();
-  if (key === 'w') moveForward();
-  if (key === 'e') turnRight();
-  if (key === 'a') strafeLeft();
-  if (key === 's') moveBackward();
-  if (key === 'd') strafeRight();
-  
-  // Renderer controls
-  if (key === 'r') {
-    console.log("R key pressed - toggling renderer");
-    if (typeof window.toggleRenderer === 'function') {
-      window.toggleRenderer();
-      console.log("Renderer toggled to:", window.usingWebGL ? "WebGL" : "Canvas");
-    } else {
-      console.error("toggleRenderer function not found!");
+    
+    // Skip if player is already moving or turning
+    if (playerRef.isMoving || playerRef.isTurning) return;
+    
+    // Forward movement (W)
+    if (window.moveForward) {
+      const delta = getScaledDirectionDeltas(playerRef.direction);
+      const nx = Math.floor(playerRef.x / window.SCALE_FACTOR) * window.SCALE_FACTOR + delta[0];
+      const ny = Math.floor(playerRef.y / window.SCALE_FACTOR) * window.SCALE_FACTOR + delta[1];
+      
+      if (canMoveTo(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR)) {
+        console.log(`Moving forward to (${nx + 0.5 * window.SCALE_FACTOR}, ${ny + 0.5 * window.SCALE_FACTOR})`);
+        startMoveAnimation(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR);
+        return; // Only one movement per frame
+      }
     }
-  }
-  
-  // Quality controls
-  if (key === 't') {
-    console.log("T key pressed - toggling quality");
-    if (typeof window.toggleRendererQuality === 'function') {
-      const quality = window.toggleRendererQuality();
-      console.log("Quality set to:", quality);
-    } else {
-      console.error("toggleRendererQuality function not found!");
+    
+    // Backward movement (S)
+    if (window.moveBackward) {
+      const delta = getScaledDirectionDeltas(playerRef.direction);
+      const nx = Math.floor(playerRef.x / window.SCALE_FACTOR) * window.SCALE_FACTOR - delta[0];
+      const ny = Math.floor(playerRef.y / window.SCALE_FACTOR) * window.SCALE_FACTOR - delta[1];
+      
+      if (canMoveTo(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR)) {
+        console.log(`Moving backward to (${nx + 0.5 * window.SCALE_FACTOR}, ${ny + 0.5 * window.SCALE_FACTOR})`);
+        startMoveAnimation(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR);
+        return; // Only one movement per frame
+      }
     }
-  }
-  
-  // Lighting controls
-  if (key === 'l') {
-    console.log("L key pressed - toggling lighting");
-    window.useEnhancedLighting = !window.useEnhancedLighting;
-    log("Enhanced lighting: " + (window.useEnhancedLighting ? "ON" : "OFF"));
-    updateControlPanelButtons();
-  }
-  
-  // Debug mode
-  if (key === 'd' && window.lightingManager) {
-    console.log("D key pressed - toggling debug mode");
-    window.lightingManager.debugMode = !window.lightingManager.debugMode;
-    log("Debug mode: " + (window.lightingManager.debugMode ? "ON" : "OFF"));
-    updateControlPanelButtons();
-  }
-  
-  // Diagnostic key
-  if (key === 'p' && window.diagnoseRendererIssues) {
-    console.log("P key pressed - printing diagnostic info");
-    window.diagnoseRendererIssues();
-    log("Renderer diagnostic printed to console");
+    
+    // Strafe left (A)
+    if (window.moveLeft) {
+      const leftDir = (playerRef.direction + 3) % 4;
+      const delta = getScaledDirectionDeltas(leftDir);
+      const nx = Math.floor(playerRef.x / window.SCALE_FACTOR) * window.SCALE_FACTOR + delta[0];
+      const ny = Math.floor(playerRef.y / window.SCALE_FACTOR) * window.SCALE_FACTOR + delta[1];
+      
+      if (canMoveTo(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR)) {
+        console.log(`Strafing left to (${nx + 0.5 * window.SCALE_FACTOR}, ${ny + 0.5 * window.SCALE_FACTOR})`);
+        startMoveAnimation(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR);
+        return; // Only one movement per frame
+      }
+    }
+    
+    // Strafe right (D)
+    if (window.moveRight) {
+      const rightDir = (playerRef.direction + 1) % 4;
+      const delta = getScaledDirectionDeltas(rightDir);
+      const nx = Math.floor(playerRef.x / window.SCALE_FACTOR) * window.SCALE_FACTOR + delta[0];
+      const ny = Math.floor(playerRef.y / window.SCALE_FACTOR) * window.SCALE_FACTOR + delta[1];
+      
+      if (canMoveTo(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR)) {
+        console.log(`Strafing right to (${nx + 0.5 * window.SCALE_FACTOR}, ${ny + 0.5 * window.SCALE_FACTOR})`);
+        startMoveAnimation(nx + 0.5 * window.SCALE_FACTOR, ny + 0.5 * window.SCALE_FACTOR);
+        return; // Only one movement per frame
+      }
+    }
+  } catch (e) {
+    console.error("Error in updateContinuousMovement:", e);
   }
 }
 
-// Initialize controls when the page loads
+// Set up button event listeners and keyboard controls
+function setupControls(player, worldMap) {
+  console.log("Setting up controls...");
+  
+  // Store references to globally provided objects
+  playerRef = player;
+  worldMapRef = worldMap;
+  
+  console.log("PlayerRef set:", playerRef ? "YES" : "NO");
+  console.log("WorldMapRef set:", worldMapRef ? "YES" : "NO");
+  
+  // Make sure SCALE_FACTOR is available from webgl-engine.js
+  if (typeof window.SCALE_FACTOR === 'undefined') {
+    console.error("SCALE_FACTOR not found! Controls may not work correctly.");
+    window.SCALE_FACTOR = 2.0; // Fallback default
+  } 
+  
+  console.log(`Controls using SCALE_FACTOR: ${window.SCALE_FACTOR}`);
+  
+  // Button event listeners
+  const btnForward = document.getElementById("btnForward");
+  if (btnForward) {
+    btnForward.addEventListener('mousedown', function() { 
+      window.moveForward = true; 
+      console.log("Forward button pressed");
+    });
+    btnForward.addEventListener('mouseup', function() { 
+      window.moveForward = false; 
+    });
+    btnForward.addEventListener('mouseleave', function() { 
+      window.moveForward = false; 
+    });
+  }
+  
+  const btnBack = document.getElementById("btnBack");
+  if (btnBack) {
+    btnBack.addEventListener('mousedown', function() { 
+      window.moveBackward = true;
+      console.log("Back button pressed");
+    });
+    btnBack.addEventListener('mouseup', function() { 
+      window.moveBackward = false; 
+    });
+    btnBack.addEventListener('mouseleave', function() { 
+      window.moveBackward = false; 
+    });
+  }
+  
+  const btnTurnLeft = document.getElementById("btnTurnLeft");
+  if (btnTurnLeft) {
+    btnTurnLeft.addEventListener('click', function() {
+      turnLeft();
+    });
+  }
+  
+  const btnTurnRight = document.getElementById("btnTurnRight");
+  if (btnTurnRight) {
+    btnTurnRight.addEventListener('click', function() {
+      turnRight();
+    });
+  }
+  
+  const btnStrafeLeft = document.getElementById("btnStrafeLeft");
+  if (btnStrafeLeft) {
+    btnStrafeLeft.addEventListener('mousedown', function() { 
+      window.moveLeft = true; 
+      console.log("Strafe Left button pressed");
+    });
+    btnStrafeLeft.addEventListener('mouseup', function() { 
+      window.moveLeft = false; 
+    });
+    btnStrafeLeft.addEventListener('mouseleave', function() { 
+      window.moveLeft = false; 
+    });
+  }
+  
+  const btnStrafeRight = document.getElementById("btnStrafeRight");
+  if (btnStrafeRight) {
+    btnStrafeRight.addEventListener('mousedown', function() { 
+      window.moveRight = true; 
+      console.log("Strafe Right button pressed");
+    });
+    btnStrafeRight.addEventListener('mouseup', function() { 
+      window.moveRight = false; 
+    });
+    btnStrafeRight.addEventListener('mouseleave', function() { 
+      window.moveRight = false; 
+    });
+  }
+  
+  // Fixed keyboard control mappings - using standard WASD layout
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'KeyW') window.moveForward = true;
+  if (e.code === 'KeyS') window.moveBackward = true;
+  if (e.code === 'KeyA') window.moveLeft = true;
+  if (e.code === 'KeyD') window.moveRight = true;
+  if (e.code === 'KeyQ') turnLeft();
+  if (e.code === 'KeyE') turnRight();
+});
+
+document.addEventListener('keyup', function(e) {
+  if (e.code === 'KeyW') window.moveForward = false;
+  if (e.code === 'KeyS') window.moveBackward = false;
+  if (e.code === 'KeyA') window.moveLeft = false;
+  if (e.code === 'KeyD') window.moveRight = false;
+});
+
+  
+  console.log("WebGL controls initialized");
+}
+
+// Export all the necessary functions to the global scope
+window.setupControls = setupControls;
+window.updateContinuousMovement = updateContinuousMovement;
+window.dirDeltas = dirDeltas;
+window.getScaledDirectionDeltas = getScaledDirectionDeltas;
+window.dirToAngle = dirToAngle;
+window.directionToString = directionToString;
+window.canMoveTo = canMoveTo;
+window.startMoveAnimation = startMoveAnimation;
+window.startTurnAnimation = startTurnAnimation;
+window.turnLeft = turnLeft;
+window.turnRight = turnRight;
+
+// Initialize on load
 window.addEventListener("load", function() {
-  // Setup UI controls
-  setupControlButtons();
-  
-  // Setup keyboard controls
-  setupKeyboardControls();
-  
-  // Create renderer controls panel after a delay to ensure everything is loaded
-  setTimeout(function() {
-    createRendererControls();
-  }, 1000);
-  
-  console.log("Controls initialized");
+  console.log("controls.js loaded and ready");
 });
