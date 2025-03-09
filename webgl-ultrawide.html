@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Might of the Beholder - WebGL Edition</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    #container {
+      display: flex;
+      height: 100vh;
+    }
+    #gameContainer {
+      flex-grow: 1;
+      position: relative;
+    }
+    #uiPanel {
+      width: 400px;
+      background: #222;
+      padding: 10px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      overflow-y: auto;
+    }
+    .btn {
+      display: inline-block;
+      margin: 4px;
+      padding: 6px 10px;
+      background: #444;
+      cursor: pointer;
+      border: 1px solid #666;
+      user-select: none;
+      font-size: 14px;
+    }
+    .btn:hover {
+      background: #555;
+    }
+    .btn:active {
+      background: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 8px;
+    }
+    td {
+      width: 150px;
+      vertical-align: top;
+      text-align: center;
+      padding: 3px;
+      border: 1px solid #444;
+    }
+    .portrait {
+      width: 136px;
+      height: 136px;
+      background: #666;
+      margin: 6px 0;
+      border: 2px solid #444;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .portrait img {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    #logPanel {
+      margin-top: 8px;
+      padding: 6px;
+      background: #111;
+      min-height: 200px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 14px;
+    }
+    #miniMapCanvas {
+      display: inline-block;
+      border: 1px solid #999;
+      background: #222;
+    }
+    .instructions {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      pointer-events: none;
+    }
+  </style>
+
+<script>
+// Initialize movement variables before anything else
+window.moveForward = false;
+window.moveBackward = false;
+window.moveLeft = false;
+window.moveRight = false;
+
+// Set up keyboard controls
+document.addEventListener('keydown', function(e) {
+  switch (e.code) {
+    case 'KeyW': window.moveForward = true; break;
+    case 'KeyS': window.moveBackward = true; break;
+    case 'KeyA': window.moveLeft = true; break;
+    case 'KeyD': window.moveRight = true; break;
+    case 'KeyQ': 
+      if (typeof window.turnLeft === 'function' && window.player) {
+        window.turnLeft(window.player); 
+      }
+      break;
+    case 'KeyE': 
+      if (typeof window.turnRight === 'function' && window.player) {
+        window.turnRight(window.player); 
+      }
+      break;
+  }
+});
+
+document.addEventListener('keyup', function(e) {
+  switch (e.code) {
+    case 'KeyW': window.moveForward = false; break;
+    case 'KeyS': window.moveBackward = false; break;
+    case 'KeyA': window.moveLeft = false; break;
+    case 'KeyD': window.moveRight = false; break;
+  }
+});
+</script>
+
+  
+  <!-- Load Three.js from CDN -->
+  <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+</head>
+<body>
+  <div id="container">
+    <div id="gameContainer">
+      <!-- Three.js canvas will be added here -->
+    </div>
+    <div id="uiPanel">
+      <center><h3>Might of the Beholder</h3></center>
+      <!-- Movement controls -->
+      <div id="controls" style="text-align: center; margin-bottom: 10px;">
+        <div>
+          <span class="btn" id="btnTurnLeft">Turn Left (Q)</span>
+          <span class="btn" id="btnForward">Forward (W)</span>
+          <span class="btn" id="btnTurnRight">Turn Right (E)</span>
+        </div>
+        <div>
+          <span class="btn" id="btnStrafeLeft">Strafe Left (A)</span>
+          <span class="btn" id="btnBack">Back (S)</span>
+          <span class="btn" id="btnStrafeRight">Strafe Right (D)</span>
+        </div>
+      </div>
+      <!-- Character info -->
+      <div id="characterPanel" style="text-align: center; margin-bottom: 10px;">
+        <table>
+          <tr>
+            <td>
+              <div>Sir Caneghem</div>
+              <div class="portrait">
+                <img src="assets/images/SirCaneghemMM3.webp" alt="Character 1" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22136%22 height=%22136%22><rect width=%22136%22 height=%22136%22 fill=%22%23666%22 /><text x=%2268%22 y=%2268%22 fill=%22white%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-size=%2220%22>Knight</text></svg>'"/>
+              </div>
+              <span class="btn" id="attack1"><big>🗡️</big></span>
+              <span class="btn" id="char1Fireball">🔥</span>
+            </td>
+            <td>
+              <div>Maximus</div>
+              <div class="portrait">
+                <img src="assets/images/MaximusMM3.webp" alt="Character 2" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22136%22 height=%22136%22><rect width=%22136%22 height=%22136%22 fill=%22%23666%22 /><text x=%2268%22 y=%2268%22 fill=%22white%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-size=%2220%22>Paladin</text></svg>'"/>
+              </div>
+              <span class="btn" id="attack2"><big>🗡️</big></span>
+              <span class="btn" id="char2Fireball">🔥</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div>Wizard</div>
+              <div class="portrait">
+                <img src="assets/images/Wizard.png" alt="Character 3" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22136%22 height=%22136%22><rect width=%22136%22 height=%22136%22 fill=%22%23666%22 /><text x=%2268%22 y=%2268%22 fill=%22white%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-size=%2220%22>Wizard</text></svg>'"/>
+              </div>
+              <span class="btn" id="attack3"><big>🗡️</big></span>
+              <span class="btn" id="char3Fireball">🔥</span>
+            </td>
+            <td>
+              <div>Dark Shade</div>
+              <div class="portrait">
+                <img src="assets/images/DarkShadeMM3.webp" alt="Character 4" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22136%22 height=%22136%22><rect width=%22136%22 height=%22136%22 fill=%22%23666%22 /><text x=%2268%22 y=%2268%22 fill=%22white%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-size=%2220%22>Rogue</text></svg>'"/>
+              </div>
+              <span class="btn" id="attack4"><big>🗡️</big></span>
+              <span class="btn" id="char4Fireball">🔥</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <!-- Mini-map -->
+      <div id="mapContainer" style="text-align: center; margin-bottom: 10px;">
+        <canvas id="miniMapCanvas" width="200" height="200"></canvas>
+      </div>
+      <!-- Log console -->
+      <div id="logPanel" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <!-- Add debug console for visibility -->
+  <div id="debugConsole" style="position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 5px; font-family: monospace; display: none;">
+    <div>Debug Console (press ~ to toggle)</div>
+    <div id="debugOutput" style="max-height: 200px; overflow-y: auto;"></div>
+  </div>
+  
+  <!-- Load scripts in correct order to prevent namespace conflicts -->
+  <script src="engine/entity.js"></script>
+  <script src="utils/debug.js"></script>
+  <script src="game/levels.js"></script>
+  <script src="engine/ui.js"></script>
+  <script src="engine/controls.js"></script>
+  <script src="game/webgl-projectiles.js"></script>
+  <script src="game/beholder.js"></script>
+  <script src="engine/webgl-engine.js"></script>
+  
+  <!-- Initialization script with debugging -->
+  <script>
+    // Override console.log to also display in our debug console
+    const originalConsoleLog = console.log;
+    console.log = function() {
+      // Call the original console.log
+      originalConsoleLog.apply(console, arguments);
+      
+      // Add to our debug console
+      try {
+        const debugOutput = document.getElementById('debugOutput');
+        if (debugOutput) {
+          const message = Array.from(arguments).join(' ');
+          const div = document.createElement('div');
+          div.textContent = message;
+          debugOutput.appendChild(div);
+          
+          // Keep only the last 20 messages
+          while (debugOutput.children.length > 20) {
+            debugOutput.removeChild(debugOutput.firstChild);
+          }
+          
+          // Scroll to bottom
+          debugOutput.scrollTop = debugOutput.scrollHeight;
+        }
+      } catch (e) {
+        // Do nothing if this fails
+      }
+    };
+    
+    // Toggle debug console with ~ key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === '`' || e.key === '~') {
+        const debugConsole = document.getElementById('debugConsole');
+        if (debugConsole) {
+          debugConsole.style.display = debugConsole.style.display === 'none' ? 'block' : 'none';
+        }
+      }
+    });
+    
+    // Initialize engine with delay to ensure DOM is ready
+    window.addEventListener('load', function() {
+      console.log("Window loaded, initializing engine...");
+      
+      // Show debug console on startup
+      document.getElementById('debugConsole').style.display = 'block';
+      
+      // Small delay to ensure everything is loaded
+      setTimeout(function() {
+        // Initialize the engine
+        if (typeof window.initEngine === 'function') {
+          try {
+            console.log("Calling initEngine...");
+            window.initEngine();
+            console.log("Engine initialized!");
+          } catch (e) {
+            console.error("Error initializing engine:", e);
+          }
+        } else {
+          console.error("initEngine function not found!");
+        }
+      }, 300);
+    });
+  </script>
+</body>
+</html>

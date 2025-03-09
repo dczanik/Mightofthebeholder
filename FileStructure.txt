@@ -1,0 +1,46 @@
+/*
+File Structure - Might of the Beholder
+
+/
+├── index.html                  // Main HTML file
+├── UltraWide.html              // Version for ultrawide monitors
+├── webgl-ultrawide.html        // Version for ultrawide monitors
+├── mobile1.html                // Mobile version 1 (for vertical phones)
+├── mobile2.html                // Mobile Version 2 (for Z-Fold phone)
+│
+├── engine/
+│   ├── engine.js                       // Original Canvas engine
+│   ├── entity.js                       // Entity system for both implementations
+│   ├── player.js                       // Player functionality
+│   ├── controls.js                     // Input handling for Canvas version
+│   └── webgl-engine.js                 // WebGL engine (new file)
+│
+├── game/
+│   ├── beholder.js                     // Game logic for both implementations
+│   ├── monsters.js                     // Monster system for both implementations
+│   ├── projectiles.js                  // Projectile system for Canvas version
+│   └── webgl-projectiles.js            // Projectile system for WebGL version
+├── utils/
+|    └── debug.js                        // Debug tools
+│
+├── assets/
+    ├── images/                 	// All game images
+        ├── Wall1.png           	// Main wall texture
+        ├── Wall1-Normal.png    			// Main wall Normal Map texture
+        ├── Wall1-Specular.png  			// Main wall Specular Highlights texture
+        ├── Wall1-AO.png        			// Main wall Ambient Occlusion texture
+        ├── SirCaneghemMM3.webp 			// Character 1 portrait
+        ├── MaximusMM3.webp     			// Character 2 portrait
+        ├── Wizard.png          			// Character 3 portrait
+        ├── DarkShadeMM3.webp   			// Character 4 portrait
+    ├── fonts/                  			// Game fonts
+        ├── Bloody Sisters Night Club.ttf  // Font for attack effects
+    ├── sounds/                 // Game sound effects and music (future)
+        ├── ...
+		
+// Key files needed for WebGL implementation:
+1. webgl-ultrawide.html                 // Main HTML file for WebGL version
+2. engine/webgl-engine.js               // Main WebGL engine 
+3. game/webgl-projectiles.js            // WebGL-specific projectile system
+		
+*/
